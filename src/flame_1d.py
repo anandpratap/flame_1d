@@ -2,25 +2,7 @@ import numpy as np
 from pylab import *
 from schemes import diff, diff_up, diff2
 from scipy.interpolate import UnivariateSpline
-def get_var(q):
-    nspecies = 3
-    n = np.size(q)
-    T = q[0:n:nspecies+1]
-    Y = np.zeros([nspecies, n/(nspecies+1)], dtype=np.complex)
-    Y[0,:] = q[1:n:nspecies+1]
-    Y[1,:] = q[2:n:nspecies+1]
-    Y[2,:] = q[3:n:nspecies+1]
-    return T, Y
-    
-def get_var_inv(T, Y):
-    nspecies = 3
-    n = np.size(T)*(nspecies+1)
-    q = np.zeros(n, dtype=np.complex)
-    q[0:n:nspecies+1] = T[:]
-    q[1:n:nspecies+1] = Y[0,:]
-    q[2:n:nspecies+1] = Y[1,:]
-    q[3:n:nspecies+1] = Y[2,:]
-    return q
+from chemistry import Chemistry
 
 def func(x, xt, left, right):
     n = len(x)
@@ -29,64 +11,95 @@ def func(x, xt, left, right):
     return f
 
 class FlameBase(object):
-    def __init__(self):
+    def __init__(self, chemistry, S_minf, S_pinf):
+        self.c = chemistry
+        self.S_minf = S_minf
+        self.S_pinf = S_pinf
+
         self.mdot = 0.2
         self.alpha = self.D = 1.5e-5
         self.n = 21
         self.x = np.linspace(0.0, 30.0e-3, self.n)
-        self.nspecies = 3
+        self.nspecies = self.c.n
         self.q = np.zeros((self.nspecies+1)*self.n, dtype=np.complex)
         
         self.dt = 1e-3
         self.maxiter = 100000
         self.tol = 1e-6
 
-        T, Y = get_var(self.q)
+        T, Y = self.get_var(self.q)
         
-        T[:] = func(self.x, 0.008, 300.0, 900.0)
-        Y[0,:] = func(self.x, 0.008, 0.1, 0.0)
-        Y[1,:] = func(self.x, 0.008, 0.1, 0.0)
-        Y[2,:] = func(self.x, 0.008, 0.0, 0.2)
-        self.q = get_var_inv(T, Y)
+        T[:] = func(self.x, 0.008, self.S_minf[0], self.S_pinf[0])
+        for i in range(self.nspecies):
+            Y[i,:] = func(self.x, 0.008, self.S_minf[i+1], self.S_pinf[i+1])
+        self.q = self.get_var_inv(T, Y)
 
+    def get_var(self, q):
+        nspecies = self.nspecies
+        n = self.n*(self.nspecies+1)
+        T = q[0:n:nspecies+1]
+        Y = np.zeros([nspecies, n/(nspecies+1)], dtype=np.complex)
+        for i in range(nspecies):
+            Y[i,:] = q[i+1:n:nspecies+1]
+        return T, Y
+    
+    def get_var_inv(self, T, Y):
+        nspecies = self.nspecies
+        n = self.n*(self.nspecies+1)
+        q = np.zeros(n, dtype=np.complex)
+        q[0:n:nspecies+1] = T[:]
+        for i in range(nspecies):
+            q[i+1:n:nspecies+1] = Y[i,:]
+        return q
+
+    def massf_to_molef(self, Y):
+        ybymw_sum = np.zeros(self.n, dtype=np.complex)
+        for i in range(self.nspecies):
+            ybymw_sum += Y[i,:]/self.c.mw[i]
+        X = np.zeros_like(Y)
+        for i in range(self.nspecies):
+            X[i,:] = (Y[i,:]/self.c.mw[i])/ybymw_sum
+        return X
+        
     def calc_source_terms(self, T, Y):
         source_T = np.zeros(self.n, dtype=T.dtype)
         source_Y = np.zeros([self.nspecies, self.n], dtype=T.dtype)
+        for idx, reaction in enumerate(self.c.reactions):
+            Ta = reaction.Ta
+            A = reaction.A
+            b = reaction.b
+            Q = reaction.Q
+            Cp = 1005.0
+            nu = reaction.nurhs - reaction.nulhs
+            
+            kf = A*T**b*np.exp(-Ta/T)
 
-        Ta = 14000.0
-        A = 1e9
-        Q = 1.5e6
-        Cp = 1005.0
+            mw = 0.029
+            xprod = np.ones_like(kf)
+            X = self.massf_to_molef(Y)
+            for i in range(len(reaction.lhs_species)):
+                p = reaction.nulhs[self.c.species.index(reaction.lhs_species[i])]
+                xprod *= X[self.c.species.index(reaction.lhs_species[i]), :]**p
+            q = kf*xprod
+            w_dot = np.zeros([self.nspecies, self.n], dtype=np.complex)
+            mw = self.c.mw
+            for i in range(self.nspecies):
+                w_dot[i,:] = nu[i]*q
 
-
-        nu_f = -1.0
-        nu_o = -1.0
-        nu_p = 2.0
+            sum_w_dot = np.sum(w_dot, axis=0)
+            w_dot_T = Q/Cp*q#(w_dot_p + w_dot_f + w_dot_o)
+            #w_dot_T = Q/Cp*sum_w_dot
+            source_T += w_dot_T
+            for i in range(self.nspecies):
+                source_Y[i,:] += w_dot[i,:]*mw[i]
+        #ioff()
+        #figure()
+#        plot(source_T)
+        #plot(source_Yo)
+#        print nu
+        #plot(source_Y.T)
+        #show()
         
-        mw = 0.029
-
-        Xf = Y[0,:]
-        Xo = Y[1,:]
-        kf = A*T*np.exp(-Ta/T)
-        q = kf*Xf*Xo
-
-        w_dot_f = nu_f*q
-        w_dot_o = nu_o*q
-        w_dot_p = nu_p*q
-
-        w_dot_T = Q/Cp*q#(w_dot_p + w_dot_f + w_dot_o)
-        if self.iterr > -1:
-            self.dt = 1e-4
-            source_T = w_dot_T
-            source_Y[0,:] = w_dot_f*mw
-            source_Y[1,:] = w_dot_o*mw
-            source_Y[2,:] = w_dot_p*mw
-            #ioff()
-            #figure()
-            #plot(source_T)
-            #plot(source_Yo)
-            #plot(source_Yp)
-            #show()
         return source_T, source_Y
 
     def calc_temperature_residual(self, T, source_T):
@@ -109,16 +122,13 @@ class FlameBase(object):
 
     def calc_residual(self, q):
         N = self.n*(self.nspecies+1)
-        T, Y = get_var(q)
+        T, Y = self.get_var(q)
         source_T, source_Y = self.calc_source_terms(T, Y)
-
         R_T = self.calc_temperature_residual(T, source_T)
         R_Y = np.zeros([self.nspecies, self.n], dtype=q.dtype)
-        R_Y[0,:] = self.calc_species_residual(Y[0,:], source_Y[0,:], 0.1)
-        R_Y[1,:] = self.calc_species_residual(Y[1,:], source_Y[1,:], 0.1)
-        R_Y[2,:] = self.calc_species_residual(Y[2,:], source_Y[2,:], 0.0)
-        nspecies = self.nspecies
-        R = get_var_inv(R_T, R_Y)
+        for i in range(self.nspecies):
+            R_Y[i,:] = self.calc_species_residual(Y[i,:], source_Y[i,:], self.S_minf[i+1])
+        R = self.get_var_inv(R_T, R_Y)
         #figure()
         #plot(self.x, R_Yf)
         #plot(self.x, R_Yo)
@@ -207,11 +217,11 @@ class FlameBase(object):
             plt.plot(self.x, q[0:self.n*(self.nspecies+1):self.nspecies+1], 'r-')
             plt.figure(2)
             clf()
-            plt.plot(self.x, q[1:self.n*(self.nspecies+1):self.nspecies+1], 'rx')
-            plt.plot(self.x, q[2:self.n*(self.nspecies+1):self.nspecies+1], 'g-')
-            plt.plot(self.x, q[3:self.n*(self.nspecies+1):self.nspecies+1], 'b-')
+            for i in range(self.nspecies):
+                plt.plot(self.x, q[i+1:self.n*(self.nspecies+1):self.nspecies+1], label=self.c.species[i])
+            plt.legend()
             plt.pause(0.0000001)
-            T, Y = get_var(q.astype(np.float64))
+            T, Y = self.get_var(q.astype(np.float64))
             np.savetxt("solution/sol.dat", np.c_[self.x, T, Y.T])
 
     def boundary(self, q):
@@ -225,5 +235,30 @@ class FlameBase(object):
     def postprocess(self, q):
         pass
 if __name__ == "__main__":
-    flame = FlameBase()
+    #species = ['A', 'B', 'C', 'D']
+    species = ['A', 'B', 'C', 'D']#, 'B2', 'C10A10']
+    S_minf = [300.0, 0.1, 0.1, 0.0, 0.8]#, 0.3, 0.5]
+    S_pinf = [900.0, 0.0, 0.0, 0.2, 0.8]#, 0.0, 0.0]
+    c = Chemistry(species)
+
+    # reaction = {'equation':'A = B', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': 1.5e6}
+    # c.add_reaction(reaction)
+
+    # reaction = {'equation':'D = C', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': 1.5e6}
+    # c.add_reaction(reaction)
+        
+    # reaction = {'equation':'C = D', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': -1.5e6}
+    # c.add_reaction(reaction)
+        
+    # reaction = {'equation':'B = A', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': -1.5e6}
+    # c.add_reaction(reaction)
+
+    reaction = {'equation':'A + B = 2*C', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': 1.5e6}
+#    reaction = {'equation':'H2 + 0.5*O2 = H2O', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': -1.5e6}
+    c.add_reaction(reaction)
+    #reaction = {'equation':'2*C = A + B', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': -1.5e6}
+    #c.add_reaction(reaction)
+    
+    flame = FlameBase(c, S_minf, S_pinf)
+    flame.dt = 1e-3
     flame.solve()

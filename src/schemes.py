@@ -8,7 +8,6 @@ def diff(y, u):
     up[1:ny-1] = (u[2:ny] - u[0:ny-2])/(y[2:ny] - y[0:ny-2])
     up[0] = (u[1] - u[0])/(y[1] - y[0])
     up[-1] = (u[-1] - u[-2])/(y[-1] - y[-2])
-
     return up
 
 
@@ -19,7 +18,7 @@ def diff_up(y, u):
     up[1:ny] = (u[1:ny] - u[0:ny-1])/(y[1:ny] - y[0:ny-1])
     #up[2:ny] = (1.5*u[2:ny] - 2.0*u[1:ny-1] + 0.5*u[0:ny-2])/(y[2:ny] - y[1:ny-1])
     up[0] = (u[1] - u[0])/(y[1] - y[0])
-    #up[-1] = (up[-1] - up[-2])/(y[-1] - y[-2])
+    up[-1] = (u[-1] - u[-2])/(y[-1] - y[-2])
     return up
 
 def diff2(y, u):
