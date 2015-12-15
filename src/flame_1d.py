@@ -6,19 +6,20 @@ def get_var(q):
     nspecies = 3
     n = np.size(q)
     T = q[0:n:nspecies+1]
-    Yf = q[1:n:nspecies+1]
-    Yo = q[2:n:nspecies+1]
-    Yp = q[3:n:nspecies+1]
-    return T, Yf, Yo, Yp
+    Y = np.zeros([nspecies, n/(nspecies+1)], dtype=np.complex)
+    Y[0,:] = q[1:n:nspecies+1]
+    Y[1,:] = q[2:n:nspecies+1]
+    Y[2,:] = q[3:n:nspecies+1]
+    return T, Y
     
-def get_var_inv(T, Yf, Yo, Yp):
+def get_var_inv(T, Y):
     nspecies = 3
     n = np.size(T)*(nspecies+1)
     q = np.zeros(n, dtype=np.complex)
     q[0:n:nspecies+1] = T[:]
-    q[1:n:nspecies+1] = Yf[:]
-    q[2:n:nspecies+1] = Yo[:]
-    q[3:n:nspecies+1] = Yp[:]
+    q[1:n:nspecies+1] = Y[0,:]
+    q[2:n:nspecies+1] = Y[1,:]
+    q[3:n:nspecies+1] = Y[2,:]
     return q
 
 def func(x, xt, left, right):
@@ -31,7 +32,7 @@ class FlameBase(object):
     def __init__(self):
         self.mdot = 0.2
         self.alpha = self.D = 1.5e-5
-        self.n = 51
+        self.n = 21
         self.x = np.linspace(0.0, 30.0e-3, self.n)
         self.nspecies = 3
         self.q = np.zeros((self.nspecies+1)*self.n, dtype=np.complex)
@@ -40,62 +41,18 @@ class FlameBase(object):
         self.maxiter = 100000
         self.tol = 1e-6
 
-        T, Yf, Yo, Yp = get_var(self.q)
+        T, Y = get_var(self.q)
         
         T[:] = func(self.x, 0.008, 300.0, 900.0)
-        Yf[:] = func(self.x, 0.008, 0.1, 0.0)
-        Yo[:] = func(self.x, 0.008, 0.1, 0.0)
-        Yp[:] = func(self.x, 0.008, 0.0, 0.2)
+        Y[0,:] = func(self.x, 0.008, 0.1, 0.0)
+        Y[1,:] = func(self.x, 0.008, 0.1, 0.0)
+        Y[2,:] = func(self.x, 0.008, 0.0, 0.2)
+        self.q = get_var_inv(T, Y)
 
-        if 0:
-            d = np.loadtxt("base_solution/sol.dat")
-            xb = d[:,0]
-            Tb = d[:,1]
-            Yfb = d[:,2]
-            Yob = d[:,3]
-            Ypb = d[:,4]
-
-            kind = 0.001
-            k = 1
-            f = UnivariateSpline(xb, Tb, s=kind, k=k)
-            T = f(self.x)
-            f = UnivariateSpline(xb, Yfb, s=kind, k=k)
-            Yf = f(self.x)
-            f = UnivariateSpline(xb, Yob, s=kind, k=k)
-            Yo = f(self.x)
-            f = UnivariateSpline(xb, Ypb, s=kind, k=k)
-            Yp = f(self.x)
-
-
-        # T[:self.n/3] = 300.0
-        # Yf[:self.n/3] = 0.1
-        # Yo[:self.n/3] = 0.1
-        # Yp[:self.n/3] = 0.0
-        
-        # T[self.n/3:] = 900.0
-        # Yf[self.n/3:] = 0.0
-        # Yo[self.n/3:] = 0.0
-        # Yp[self.n/3:] = 0.2
-
-        # T[self.n/3] = 900.0
-        # Yf[self.n/3] = 0.05
-        # Yo[self.n/3] = 0.05
-        # Yp[self.n/3] = 0.2/2
-        self.q = get_var_inv(T, Yf, Yo, Yp)
-     #   figure()
-        # print np.shape(self.x), np.shape(Yf)
-     #   plot(self.x, Yf)
-     #   plot(self.x, Yo)
-     #   plot(self.x, Yp)
-     #   figure()
-     #   plot(self.x, T)
-     #   show()
-
-    def calc_source_terms(self, T, Yf, Yo, Yp):
+    def calc_source_terms(self, T, Y):
         source_T = np.zeros(self.n, dtype=T.dtype)
-        source_Yf = np.zeros(self.n, dtype=T.dtype)
-        source_Yo = np.zeros(self.n, dtype=T.dtype)
-        source_Yp = np.zeros(self.n, dtype=T.dtype)
+        source_Y = np.zeros([self.nspecies, self.n], dtype=T.dtype)
+
         Ta = 14000.0
         A = 1e9
         Q = 1.5e6
@@ -108,8 +65,8 @@ class FlameBase(object):
         
         mw = 0.029
 
-        Xf = Yf
-        Xo = Yo
+        Xf = Y[0,:]
+        Xo = Y[1,:]
         kf = A*T*np.exp(-Ta/T)
         q = kf*Xf*Xo
 
@@ -121,16 +78,16 @@ class FlameBase(object):
         if self.iterr > -1:
             self.dt = 1e-4
             source_T = w_dot_T
-            source_Yf = w_dot_f*mw
-            source_Yo = w_dot_o*mw
-            source_Yp = w_dot_p*mw
+            source_Y[0,:] = w_dot_f*mw
+            source_Y[1,:] = w_dot_o*mw
+            source_Y[2,:] = w_dot_p*mw
             #ioff()
             #figure()
             #plot(source_T)
             #plot(source_Yo)
             #plot(source_Yp)
             #show()
-        return source_T, source_Yf, source_Yo, source_Yp
+        return source_T, source_Y
 
     def calc_temperature_residual(self, T, source_T):
         x = self.x
@@ -151,19 +108,17 @@ class FlameBase(object):
         return R
 
     def calc_residual(self, q):
-        R = np.zeros(self.n*(self.nspecies+1), dtype=q.dtype)
         N = self.n*(self.nspecies+1)
-        T, Yf, Yo, Yp = get_var(q)
-        source_T, source_Yf, source_Yo, source_Yp = self.calc_source_terms(T, Yf, Yo, Yp)
+        T, Y = get_var(q)
+        source_T, source_Y = self.calc_source_terms(T, Y)
+
         R_T = self.calc_temperature_residual(T, source_T)
-        R_Yf = self.calc_species_residual(Yf, source_Yf, 0.1)
-        R_Yo = self.calc_species_residual(Yo, source_Yo, 0.1)
-        R_Yp = self.calc_species_residual(Yp, source_Yp, 0.0)
+        R_Y = np.zeros([self.nspecies, self.n], dtype=q.dtype)
+        R_Y[0,:] = self.calc_species_residual(Y[0,:], source_Y[0,:], 0.1)
+        R_Y[1,:] = self.calc_species_residual(Y[1,:], source_Y[1,:], 0.1)
+        R_Y[2,:] = self.calc_species_residual(Y[2,:], source_Y[2,:], 0.0)
         nspecies = self.nspecies
-        R[0:N:nspecies+1] = R_T[:]
-        R[1:N:nspecies+1] = R_Yf[:]
-        R[2:N:nspecies+1] = R_Yo[:]
-        R[3:N:nspecies+1] = R_Yp[:]
+        R = get_var_inv(R_T, R_Y)
         #figure()
         #plot(self.x, R_Yf)
         #plot(self.x, R_Yo)
@@ -234,6 +189,7 @@ class FlameBase(object):
             self.iterr = i
             dq, l2norm = self.step_implicit(q, dt)
             q[:] = q[:] + dq[:]
+            q.clip(min=0)
             self.boundary(q)
             print "Iteration: %i Norm: %1.2e"%(i, l2norm)
             self.plot(q)
@@ -255,8 +211,8 @@ class FlameBase(object):
             plt.plot(self.x, q[2:self.n*(self.nspecies+1):self.nspecies+1], 'g-')
             plt.plot(self.x, q[3:self.n*(self.nspecies+1):self.nspecies+1], 'b-')
             plt.pause(0.0000001)
-            T, Yf, Yo, Yp = get_var(q.astype(np.float64))
-            np.savetxt("solution/sol.dat", np.c_[self.x, T, Yf, Yo, Yp])
+            T, Y = get_var(q.astype(np.float64))
+            np.savetxt("solution/sol.dat", np.c_[self.x, T, Y.T])
 
     def boundary(self, q):
         if self.iterr < -1 :
