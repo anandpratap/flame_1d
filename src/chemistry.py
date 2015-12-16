@@ -53,8 +53,9 @@ def calc_molecular_weight(s):
     return mw
 
 class Chemistry(object):
-    def __init__(self, species):
+    def __init__(self, species, enthalpy):
         self.species = species
+        self.enthalpy = enthalpy
         self.n = len(species)
         self.setup()
         self.reactions = []
@@ -101,11 +102,15 @@ class Chemistry(object):
         r.rhs_species = rhs_s
         r.nulhs = nulhs
         r.nurhs = nurhs
-
+        Q = 0.0
+        for i in range(len(r.rhs_species)):
+            Q += self.enthalpy[self.species.index(r.rhs_species[i])]
+        for i in range(len(r.lhs_species)):
+            Q -= self.enthalpy[self.species.index(r.lhs_species[i])]
         r.A = reaction['A']
         r.b = reaction['b']
         r.Ta = reaction['Ta']
-        r.Q = reaction['Q']
+        r.Q = Q
         return r
 
 

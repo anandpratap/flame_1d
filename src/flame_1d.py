@@ -87,6 +87,7 @@ class FlameBase(object):
                 w_dot[i,:] = nu[i]*q
 
             sum_w_dot = np.sum(w_dot, axis=0)
+            
             w_dot_T = Q/Cp*q#(w_dot_p + w_dot_f + w_dot_o)
             #w_dot_T = Q/Cp*sum_w_dot
             source_T += w_dot_T
@@ -237,9 +238,10 @@ class FlameBase(object):
 if __name__ == "__main__":
     #species = ['A', 'B', 'C', 'D']
     species = ['A', 'B', 'C', 'D']#, 'B2', 'C10A10']
+    enthalpy = [0.0, 0.0, 1.5e6, 0.0]
     S_minf = [300.0, 0.1, 0.1, 0.0, 0.8]#, 0.3, 0.5]
     S_pinf = [900.0, 0.0, 0.0, 0.2, 0.8]#, 0.0, 0.0]
-    c = Chemistry(species)
+    c = Chemistry(species, enthalpy)
 
     # reaction = {'equation':'A = B', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': 1.5e6}
     # c.add_reaction(reaction)
@@ -253,7 +255,7 @@ if __name__ == "__main__":
     # reaction = {'equation':'B = A', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': -1.5e6}
     # c.add_reaction(reaction)
 
-    reaction = {'equation':'A + B = 2*C', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': 1.5e6}
+    reaction = {'equation':'A + B = 2*C', 'A': 1e9, 'b': 1.0, 'Ta':14000.0}
 #    reaction = {'equation':'H2 + 0.5*O2 = H2O', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': -1.5e6}
     c.add_reaction(reaction)
     #reaction = {'equation':'2*C = A + B', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': -1.5e6}
