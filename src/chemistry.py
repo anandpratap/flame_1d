@@ -104,13 +104,16 @@ class Chemistry(object):
         r.nurhs = nurhs
         Q = 0.0
         for i in range(len(r.rhs_species)):
-            Q += self.enthalpy[self.species.index(r.rhs_species[i])]
+            i_ = self.species.index(r.rhs_species[i])
+            Q += self.enthalpy[i_]*r.nurhs[i_]
         for i in range(len(r.lhs_species)):
-            Q -= self.enthalpy[self.species.index(r.lhs_species[i])]
+            i_ = self.species.index(r.lhs_species[i])
+            Q -= self.enthalpy[i_]*r.nulhs[i_]
         r.A = reaction['A']
         r.b = reaction['b']
         r.Ta = reaction['Ta']
         r.Q = Q
+        print Q
         return r
 
 

@@ -107,7 +107,7 @@ class FlameBase(object):
         x = self.x
         R = np.zeros(self.n, dtype=T.dtype)
         R = -diff_up(self.x, T)*self.mdot + self.alpha*diff2(self.x, T) + source_T
-        R[0] = -(T[0] - 300.0)
+        R[0] = -(T[0] - self.S_minf[0])
         R[-1] = -1/(x[-1] - x[-2])*(T[-1] - T[-2])
         #R[-1] = -1/(x[-1] - x[-2])*(1.5*T[-1] - 2.0*T[-2] + 0.5*T[-3])
         return R
@@ -161,15 +161,6 @@ class FlameBase(object):
         for i in range(0, n):
             A[i,i] = 1./dt[i]
         A = A - dRdq
-        print np.linalg.cond(A)
-        print norm(dRdq)
-        plt.ion()
-        plt.figure(3)
-        plt.clf()
-        plt.plot(real(np.linalg.eigvals(dRdq[0:n:4,0:n:4]))*dt[0:n:4], imag(np.linalg.eigvals(dRdq[0:n:4,0:n:4]))*dt[0:n:4], 'o')
-        plt.plot(real(np.linalg.eigvals(dRdq[1:n:4,1:n:4]))*dt[1:n:4], imag(np.linalg.eigvals(dRdq[1:n:4,1:n:4]))*dt[1:n:4], 'o')
-        plt.ylim(-1, 1)
-#        plt.show()
         dq = linalg.solve(A, R)
         l2norm = np.sqrt(sum(R**2))/np.size(R)
         return dq, l2norm
@@ -237,10 +228,10 @@ class FlameBase(object):
         pass
 if __name__ == "__main__":
     #species = ['A', 'B', 'C', 'D']
-    species = ['A', 'B', 'C', 'D']#, 'B2', 'C10A10']
-    enthalpy = [0.0, 0.0, 1.5e6, 0.0]
-    S_minf = [300.0, 0.1, 0.1, 0.0, 0.8]#, 0.3, 0.5]
-    S_pinf = [900.0, 0.0, 0.0, 0.2, 0.8]#, 0.0, 0.0]
+    species = ['A2', 'B2', 'C2', 'D2']#, 'B2', 'C10A10']
+    enthalpy = [0.0, 0.0, 1.5e6/2, 0.0]
+    S_minf = [300.0, 0.1, 0.1, 0.1, 0.7]#, 0.3, 0.5]
+    S_pinf = [900.0, 0.0, 0.0, 0.0, 1.0]#, 0.0, 0.0]
     c = Chemistry(species, enthalpy)
 
     # reaction = {'equation':'A = B', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': 1.5e6}
@@ -255,7 +246,9 @@ if __name__ == "__main__":
     # reaction = {'equation':'B = A', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': -1.5e6}
     # c.add_reaction(reaction)
 
-    reaction = {'equation':'A + B = 2*C', 'A': 1e9, 'b': 1.0, 'Ta':14000.0}
+    #reaction = {'equation':'A2 = C2', 'A': 1e9, 'b': 1.0, 'Ta':14000.0}
+    #c.add_reaction(reaction)
+    reaction = {'equation':'C2 = A2', 'A': 1e9, 'b': 1.0, 'Ta':14000.0}
 #    reaction = {'equation':'H2 + 0.5*O2 = H2O', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': -1.5e6}
     c.add_reaction(reaction)
     #reaction = {'equation':'2*C = A + B', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': -1.5e6}
