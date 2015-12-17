@@ -56,7 +56,7 @@ class Chemistry(object):
     def __init__(self, species, enthalpy):
         self.species = species
         self.enthalpy = enthalpy
-        self.n = len(species)
+        self.nspecies = len(species)
         self.setup()
         self.reactions = []
 
@@ -72,6 +72,59 @@ class Chemistry(object):
         r = self.check_reaction(reaction)
         self.reactions.append(r)
         return True
+
+    def massf_to_molef(self, Y):
+        n = np.shape(Y)[1]
+        ybymw_sum = np.zeros(n, dtype=np.complex)
+        for i in range(self.nspecies):
+            ybymw_sum += Y[i,:]/self.mw[i]
+        X = np.zeros_like(Y)
+        for i in range(self.nspecies):
+            X[i,:] = (Y[i,:]/self.mw[i])/ybymw_sum
+        return X
+    
+    def calc_source_terms(self, T, Y):
+        n = np.size(T)
+        source_T = np.zeros(n, dtype=T.dtype)
+        source_Y = np.zeros([self.nspecies, n], dtype=T.dtype)
+        for idx, reaction in enumerate(self.reactions):
+            Ta = reaction.Ta
+            A = reaction.A
+            b = reaction.b
+            Q = reaction.Q
+            Cp = 1005.0
+            nu = reaction.nurhs - reaction.nulhs
+            
+            kf = A*T**b*np.exp(-Ta/T)
+            mw = 0.029
+            xprod = np.ones_like(kf)
+            X = self.massf_to_molef(Y)
+            for i in range(len(reaction.lhs_species)):
+                p = reaction.nulhs[self.species.index(reaction.lhs_species[i])]
+                xprod *= X[self.species.index(reaction.lhs_species[i]), :]**p
+            q = kf*xprod
+            w_dot = np.zeros([self.nspecies, n], dtype=np.complex)
+            mw = self.mw
+            for i in range(self.nspecies):
+                w_dot[i,:] = nu[i]*q
+
+            sum_w_dot = np.sum(w_dot, axis=0)
+            
+            w_dot_T = Q/Cp*q#(w_dot_p + w_dot_f + w_dot_o)
+            #w_dot_T = Q/Cp*sum_w_dot
+            source_T += w_dot_T
+            for i in range(self.nspecies):
+                source_Y[i,:] += w_dot[i,:]*mw[i]
+        #ioff()
+        #figure()
+#        plot(source_T)
+        #plot(source_Yo)
+#        print nu
+        #plot(source_Y.T)
+        #show()
+        
+        return source_T, source_Y
+
     
     def check_reaction(self, reaction):
         nulhs = np.zeros(len(self.species))

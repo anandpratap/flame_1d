@@ -20,7 +20,7 @@ class FlameBase(object):
         self.alpha = self.D = 1.5e-5
         self.n = 21
         self.x = np.linspace(0.0, 30.0e-3, self.n)
-        self.nspecies = self.c.n
+        self.nspecies = self.c.nspecies
         self.q = np.zeros((self.nspecies+1)*self.n, dtype=np.complex)
         
         self.dt = 1e-3
@@ -61,48 +61,6 @@ class FlameBase(object):
             X[i,:] = (Y[i,:]/self.c.mw[i])/ybymw_sum
         return X
         
-    def calc_source_terms(self, T, Y):
-        source_T = np.zeros(self.n, dtype=T.dtype)
-        source_Y = np.zeros([self.nspecies, self.n], dtype=T.dtype)
-        for idx, reaction in enumerate(self.c.reactions):
-            Ta = reaction.Ta
-            A = reaction.A
-            b = reaction.b
-            Q = reaction.Q
-            Cp = 1005.0
-            nu = reaction.nurhs - reaction.nulhs
-            
-            kf = A*T**b*np.exp(-Ta/T)
-
-            mw = 0.029
-            xprod = np.ones_like(kf)
-            X = self.massf_to_molef(Y)
-            for i in range(len(reaction.lhs_species)):
-                p = reaction.nulhs[self.c.species.index(reaction.lhs_species[i])]
-                xprod *= X[self.c.species.index(reaction.lhs_species[i]), :]**p
-            q = kf*xprod
-            w_dot = np.zeros([self.nspecies, self.n], dtype=np.complex)
-            mw = self.c.mw
-            for i in range(self.nspecies):
-                w_dot[i,:] = nu[i]*q
-
-            sum_w_dot = np.sum(w_dot, axis=0)
-            
-            w_dot_T = Q/Cp*q#(w_dot_p + w_dot_f + w_dot_o)
-            #w_dot_T = Q/Cp*sum_w_dot
-            source_T += w_dot_T
-            for i in range(self.nspecies):
-                source_Y[i,:] += w_dot[i,:]*mw[i]
-        #ioff()
-        #figure()
-#        plot(source_T)
-        #plot(source_Yo)
-#        print nu
-        #plot(source_Y.T)
-        #show()
-        
-        return source_T, source_Y
-
     def calc_temperature_residual(self, T, source_T):
         x = self.x
         R = np.zeros(self.n, dtype=T.dtype)
@@ -124,7 +82,7 @@ class FlameBase(object):
     def calc_residual(self, q):
         N = self.n*(self.nspecies+1)
         T, Y = self.get_var(q)
-        source_T, source_Y = self.calc_source_terms(T, Y)
+        source_T, source_Y = self.c.calc_source_terms(T, Y)
         R_T = self.calc_temperature_residual(T, source_T)
         R_Y = np.zeros([self.nspecies, self.n], dtype=q.dtype)
         for i in range(self.nspecies):
