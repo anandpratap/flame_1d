@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import re
+
 ELEMENTS = {'O':16.0/1e3, 'N':14.0/1e3, 'H':1.0/1e3}
 ELEMENTS['A'] = 0.029
 ELEMENTS['B'] = 0.029
@@ -66,7 +67,6 @@ class Chemistry(object):
         self.mw = mw
         for s in range(len(self.species)):
             self.obj_species[self.species[s]] = mw[s]
-        print self.obj_species
 
     def add_reaction(self, reaction):
         r = self.check_reaction(reaction)
@@ -82,7 +82,7 @@ class Chemistry(object):
         for i in range(self.nspecies):
             X[i,:] = (Y[i,:]/self.mw[i])/ybymw_sum
         return X
-    
+
     def calc_source_terms(self, T, Y):
         n = np.size(T)
         source_T = np.zeros(n, dtype=T.dtype)
@@ -155,18 +155,21 @@ class Chemistry(object):
         r.rhs_species = rhs_s
         r.nulhs = nulhs
         r.nurhs = nurhs
-        Q = 0.0
-        for i in range(len(r.rhs_species)):
-            i_ = self.species.index(r.rhs_species[i])
-            Q += self.enthalpy[i_]*r.nurhs[i_]
-        for i in range(len(r.lhs_species)):
-            i_ = self.species.index(r.lhs_species[i])
-            Q -= self.enthalpy[i_]*r.nulhs[i_]
+        
+        try:
+            Q = reaction['Q']
+        except:
+            Q = 0.0
+            for i in range(len(r.rhs_species)):
+                i_ = self.species.index(r.rhs_species[i])
+                Q += self.enthalpy[i_]*r.nurhs[i_]
+            for i in range(len(r.lhs_species)):
+                i_ = self.species.index(r.lhs_species[i])
+                Q -= self.enthalpy[i_]*r.nulhs[i_]
         r.A = reaction['A']
         r.b = reaction['b']
         r.Ta = reaction['Ta']
         r.Q = Q
-        print Q
         return r
 
 
@@ -179,7 +182,7 @@ class Chemistry(object):
 
 if __name__ == "__main__":
     species = ['H2', 'O2', 'H2O']
+    enthalpy = [0.0, 0.0, 0.0]
     reaction = {'equation':'H2 + 0.5*O2 = H2O', 'A': 1e9, 'b': 1.0, 'Ta':14000.0, 'Q': 1.5e6}
-    c = Chemistry(species)
+    c = Chemistry(species, enthalpy)
     c.add_reaction(reaction)
-
